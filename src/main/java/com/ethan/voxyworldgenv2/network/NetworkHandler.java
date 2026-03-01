@@ -9,7 +9,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LightLayer;
@@ -21,8 +21,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class NetworkHandler {
-    public static final Identifier HANDSHAKE_ID = Identifier.parse(VoxyWorldGenV2.MOD_ID + ":handshake");
-    public static final Identifier LOD_DATA_ID = Identifier.parse(VoxyWorldGenV2.MOD_ID + ":lod_data");
+    public static final ResourceLocation HANDSHAKE_ID = ResourceLocation.parse(VoxyWorldGenV2.MOD_ID + ":handshake");
+    public static final ResourceLocation LOD_DATA_ID = ResourceLocation.parse(VoxyWorldGenV2.MOD_ID + ":lod_data");
 
     public record HandshakePayload(boolean serverHasMod) implements CustomPacketPayload {
         public static final Type<HandshakePayload> TYPE = new Type<>(HANDSHAKE_ID);
@@ -105,7 +105,7 @@ public class NetworkHandler {
 
     public static void broadcastLODData(LevelChunk chunk) {
         ChunkPos pos = chunk.getPos();
-        int minY = chunk.getMinSectionY();
+        int minY = chunk.getMinSection();
         List<LODDataPayload.SectionData> sections = new ArrayList<>();
         
         var lightEngine = chunk.getLevel().getLightEngine();
@@ -174,7 +174,7 @@ public class NetworkHandler {
 
     public static void sendLODData(ServerPlayer player, LevelChunk chunk) {
         ChunkPos pos = chunk.getPos();
-        int minY = chunk.getMinSectionY();
+        int minY = chunk.getMinSection();
         List<LODDataPayload.SectionData> sections = new ArrayList<>();
         
         var lightEngine = chunk.getLevel().getLightEngine();

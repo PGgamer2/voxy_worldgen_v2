@@ -9,9 +9,9 @@ import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.PalettedContainer;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 
 public class NetworkClientHandler {
     
@@ -49,9 +49,8 @@ public class NetworkClientHandler {
             io.netty.buffer.ByteBuf statesRaw = io.netty.buffer.Unpooled.wrappedBuffer(sectionData.states());
             io.netty.buffer.ByteBuf biomesRaw = io.netty.buffer.Unpooled.wrappedBuffer(sectionData.biomes());
             try {
-                // recreate section using PalettedContainerFactory
-                PalettedContainerFactory factory = PalettedContainerFactory.create(level.registryAccess());
-                LevelChunkSection section = new LevelChunkSection(factory);
+                // recreate section
+                LevelChunkSection section = new LevelChunkSection(level.registryAccess().registryOrThrow(Registries.BIOME));
                 
                 // we need to read the states and biomes back using RegistryFriendlyByteBuf for palette consistency
                 net.minecraft.network.RegistryFriendlyByteBuf statesBuf = new net.minecraft.network.RegistryFriendlyByteBuf(
