@@ -2,13 +2,12 @@ package com.ethan.voxyworldgenv2.network;
 
 import com.ethan.voxyworldgenv2.VoxyWorldGenV2;
 import com.ethan.voxyworldgenv2.core.PlayerTracker;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
@@ -21,13 +20,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class NetworkHandler {
-    public static final ResourceLocation HANDSHAKE_ID = ResourceLocation.parse(VoxyWorldGenV2.MOD_ID + ":handshake");
-    public static final ResourceLocation LOD_DATA_ID = ResourceLocation.parse(VoxyWorldGenV2.MOD_ID + ":lod_data");
+    public static final ResourceLocation HANDSHAKE_ID = ResourceLocation.tryParse(VoxyWorldGenV2.MOD_ID + ":handshake");
+    public static final ResourceLocation LOD_DATA_ID = ResourceLocation.tryParse(VoxyWorldGenV2.MOD_ID + ":lod_data");
 
-    public record HandshakePayload(boolean serverHasMod) implements CustomPacketPayload {
-        public static final Type<HandshakePayload> TYPE = new Type<>(HANDSHAKE_ID);
-        public static final StreamCodec<FriendlyByteBuf, HandshakePayload> CODEC = CustomPacketPayload.codec(HandshakePayload::write, HandshakePayload::new);
-
+    public record HandshakePayload(boolean serverHasMod) {
         public HandshakePayload(FriendlyByteBuf buf) {
             this(buf.readBoolean());
         }
@@ -35,27 +31,19 @@ public class NetworkHandler {
         public void write(FriendlyByteBuf buf) {
             buf.writeBoolean(this.serverHasMod);
         }
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
     }
 
-    public record LODDataPayload(ChunkPos pos, int minY, List<SectionData> sections) implements CustomPacketPayload {
-        public static final Type<LODDataPayload> TYPE = new Type<>(LOD_DATA_ID);
-        public static final StreamCodec<RegistryFriendlyByteBuf, LODDataPayload> CODEC = CustomPacketPayload.codec(LODDataPayload::write, LODDataPayload::new);
+    public record LODDataPayload(ChunkPos pos, int minY, List<SectionData> sections) {
 
         public record SectionData(int y, byte[] states, byte[] biomes, byte[] blockLight, byte[] skyLight) {
-            public void write(RegistryFriendlyByteBuf buf) {
+            public void write(FriendlyByteBuf buf) {
                 buf.writeInt(y);
                 buf.writeByteArray(states);
                 buf.writeByteArray(biomes);
                 buf.writeNullable(blockLight, (b, a) -> b.writeByteArray(a));
                 buf.writeNullable(skyLight, (b, a) -> b.writeByteArray(a));
             }
-
-            public static SectionData read(RegistryFriendlyByteBuf buf) {
+            public static SectionData read(FriendlyByteBuf buf) {
                 return new SectionData(
                     buf.readInt(), 
                     buf.readByteArray(), 
@@ -66,29 +54,20 @@ public class NetworkHandler {
             }
         }
 
-        public LODDataPayload(RegistryFriendlyByteBuf buf) {
-            this(buf.readChunkPos(), buf.readInt(), buf.readCollection(ArrayList::new, b -> SectionData.read((RegistryFriendlyByteBuf) b)));
+        public LODDataPayload(FriendlyByteBuf buf) {
+            this(buf.readChunkPos(), buf.readInt(), buf.readCollection(ArrayList::new, b -> SectionData.read((FriendlyByteBuf) b)));
         }
 
-        public void write(RegistryFriendlyByteBuf buf) {
+        public void write(FriendlyByteBuf buf) {
             buf.writeChunkPos(pos);
             buf.writeInt(minY);
             // cast to avoid ambiguous writeCollection / BiConsumer type issues
-            buf.writeCollection(sections, (b, s) -> s.write((RegistryFriendlyByteBuf) b));
+            buf.writeCollection(sections, (b, s) -> s.write((FriendlyByteBuf) b));
         }
 
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
     }
 
     public static void init() {
-        PayloadTypeRegistry.playC2S().register(HandshakePayload.TYPE, HandshakePayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(HandshakePayload.TYPE, HandshakePayload.CODEC);
-        
-        PayloadTypeRegistry.playS2C().register(LODDataPayload.TYPE, LODDataPayload.CODEC);
-        
         VoxyWorldGenV2.LOGGER.info("voxy networking initialized");
     }
 
@@ -104,16 +83,16 @@ public class NetworkHandler {
             if (section == null || section.hasOnlyAir()) continue;
             
             // serialize section
-            io.netty.buffer.ByteBuf statesRaw = io.netty.buffer.Unpooled.buffer();
-            io.netty.buffer.ByteBuf biomesRaw = io.netty.buffer.Unpooled.buffer();
+            ByteBuf statesRaw = Unpooled.buffer();
+            ByteBuf biomesRaw = Unpooled.buffer();
             byte[] states, biomes;
             try {
-                RegistryFriendlyByteBuf statesBuf = new RegistryFriendlyByteBuf(new FriendlyByteBuf(statesRaw), chunk.getLevel().registryAccess());
+                FriendlyByteBuf statesBuf = new FriendlyByteBuf(statesRaw);
                 section.getStates().write(statesBuf);
                 states = new byte[statesBuf.readableBytes()];
                 statesBuf.readBytes(states);
-                
-                RegistryFriendlyByteBuf biomesBuf = new RegistryFriendlyByteBuf(new FriendlyByteBuf(biomesRaw), chunk.getLevel().registryAccess());
+
+                FriendlyByteBuf biomesBuf = new FriendlyByteBuf(biomesRaw);
                 section.getBiomes().write(biomesBuf);
                 biomes = new byte[biomesBuf.readableBytes()];
                 biomesBuf.readBytes(biomes);
@@ -137,25 +116,32 @@ public class NetworkHandler {
         }
         
         if (sections.isEmpty()) return;
-        
+
         LODDataPayload payload = new LODDataPayload(pos, minY, sections);
-        
-        double maxDistSq = 4096.0 * 4096.0;
-        
-        for (ServerPlayer player : PlayerTracker.getInstance().getPlayers()) {
+        ByteBuf outRaw = Unpooled.buffer();
+        try {
+            FriendlyByteBuf outFb = new FriendlyByteBuf(outRaw);
+            payload.write(outFb);
+
+            double maxDistSq = 4096.0 * 4096.0;
+
+            for (ServerPlayer player : PlayerTracker.getInstance().getPlayers()) {
             if (player.level() != chunk.getLevel()) continue;
             
             double dx = player.getX() - (pos.getMiddleBlockX());
             double dz = player.getZ() - (pos.getMiddleBlockZ());
-            if (dx * dx + dz * dz <= maxDistSq) {
-                ServerPlayNetworking.send(player, payload);
-                
-                // mark as synced for this player
-                var synced = PlayerTracker.getInstance().getSyncedChunks(player.getUUID());
-                if (synced != null) {
-                    synced.add(pos.toLong());
+                if (dx * dx + dz * dz <= maxDistSq) {
+                    FriendlyByteBuf sendFb = new FriendlyByteBuf(outRaw.retainedDuplicate());
+                    ServerPlayNetworking.send(player, LOD_DATA_ID, sendFb);
+
+                    var synced = PlayerTracker.getInstance().getSyncedChunks(player.getUUID());
+                    if (synced != null) {
+                        synced.add(pos.toLong());
+                    }
                 }
             }
+        } finally {
+            outRaw.release();
         }
     }
 
@@ -174,12 +160,12 @@ public class NetworkHandler {
             io.netty.buffer.ByteBuf biomesRaw = io.netty.buffer.Unpooled.buffer();
             byte[] states, biomes;
             try {
-                RegistryFriendlyByteBuf statesBuf = new RegistryFriendlyByteBuf(new FriendlyByteBuf(statesRaw), chunk.getLevel().registryAccess());
+                FriendlyByteBuf statesBuf = new FriendlyByteBuf(statesRaw);
                 section.getStates().write(statesBuf);
                 states = new byte[statesBuf.readableBytes()];
                 statesBuf.readBytes(states);
-                
-                RegistryFriendlyByteBuf biomesBuf = new RegistryFriendlyByteBuf(new FriendlyByteBuf(biomesRaw), chunk.getLevel().registryAccess());
+
+                FriendlyByteBuf biomesBuf = new FriendlyByteBuf(biomesRaw);
                 section.getBiomes().write(biomesBuf);
                 biomes = new byte[biomesBuf.readableBytes()];
                 biomesBuf.readBytes(biomes);
@@ -202,16 +188,32 @@ public class NetworkHandler {
         }
         
         if (sections.isEmpty()) return;
-        
-        ServerPlayNetworking.send(player, new LODDataPayload(pos, minY, sections));
-        
-        var synced = PlayerTracker.getInstance().getSyncedChunks(player.getUUID());
-        if (synced != null) {
-            synced.add(pos.toLong());
+
+        LODDataPayload payload = new LODDataPayload(pos, minY, sections);
+        ByteBuf outRaw = Unpooled.buffer();
+        try {
+            FriendlyByteBuf outFb = new FriendlyByteBuf(outRaw);
+            payload.write(outFb);
+
+            ServerPlayNetworking.send(player, LOD_DATA_ID, new FriendlyByteBuf(outRaw.retainedDuplicate()));
+
+            var synced = PlayerTracker.getInstance().getSyncedChunks(player.getUUID());
+            if (synced != null) {
+                synced.add(pos.toLong());
+            }
+        } finally {
+            outRaw.release();
         }
     }
 
     public static void sendHandshake(ServerPlayer player) {
-        ServerPlayNetworking.send(player, new HandshakePayload(true));
+        ByteBuf outRaw = Unpooled.buffer();
+        try {
+            FriendlyByteBuf outFb = new FriendlyByteBuf(outRaw);
+            outFb.writeBoolean(true);
+            ServerPlayNetworking.send(player, HANDSHAKE_ID, new FriendlyByteBuf(outRaw.retainedDuplicate()));
+        } finally {
+            outRaw.release();
+        }
     }
 }
