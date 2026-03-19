@@ -154,7 +154,8 @@ public final class ChunkGenerationManager {
     private void workerLoop() {
         while (workerRunning.get() && running.get()) {
             try {
-                if (!Config.DATA.enabled || server == null) {
+                final MinecraftServer workerServer = server;
+                if (!Config.DATA.enabled || workerServer == null) {
                     Thread.sleep(100);
                     continue;
                 }
@@ -201,8 +202,8 @@ public final class ChunkGenerationManager {
                             final List<ChunkPos> finalSyncBatch = new ArrayList<>(syncBatch);
                             final ServerLevel level = ds.level;
                             final UUID playerUUID = player.getUUID();
-                            server.execute(() -> {
-                                ServerPlayer p = server.getPlayerList().getPlayer(playerUUID);
+                            workerServer.execute(() -> {
+                                ServerPlayer p = workerServer.getPlayerList().getPlayer(playerUUID);
                                 if (p != null) {
                                     for (ChunkPos syncPos : finalSyncBatch) {
                                         LevelChunk c = level.getChunkSource().getChunk(syncPos.x, syncPos.z, false);
@@ -285,7 +286,7 @@ public final class ChunkGenerationManager {
                 }
 
                 if (!readyToGenerate.isEmpty()) {
-                    server.execute(() -> {
+                    workerServer.execute(() -> {
                         ServerChunkCache cache = finalState.level.getChunkSource();
                         List<ChunkPos> actuallyGenerate = new ArrayList<>();
                         
@@ -321,7 +322,7 @@ public final class ChunkGenerationManager {
                                             onFailure(finalState, pos);
                                         }
                                         cleanupTask(finalState.level, pos);
-                                    }, server);
+                                    }, workerServer);
                             }
                         }
                     });
