@@ -72,6 +72,17 @@ public class NetworkHandler {
         VoxyWorldGenV2.LOGGER.info("voxy networking initialized");
     }
 
+    private static void setSynced(ServerPlayer player, ChunkPos pos, boolean sync) {
+        var synced = PlayerTracker.getInstance().getSyncedChunks(player.getUUID());
+        if (synced != null) {
+            if (sync) {
+                synced.add(pos.toLong());
+            } else {
+                synced.remove(pos.toLong());
+            }
+        }
+    }
+
     public static void broadcastLODData(LevelChunk chunk) {
         ChunkPos pos = chunk.getPos();
         int minY = chunk.getMinSection();
@@ -127,19 +138,14 @@ public class NetworkHandler {
             double maxDistSq = 4096.0 * 4096.0;
 
             for (ServerPlayer player : PlayerTracker.getInstance().getPlayers()) {
-            if (player.level() != chunk.getLevel()) continue;
-            
-            double dx = player.getX() - (pos.getMiddleBlockX());
-            double dz = player.getZ() - (pos.getMiddleBlockZ());
-                if (dx * dx + dz * dz <= maxDistSq) {
+                double dx = player.getX() - (pos.getMiddleBlockX());
+                double dz = player.getZ() - (pos.getMiddleBlockZ());
+                if (player.level() == chunk.getLevel() && dx * dx + dz * dz < maxDistSq) {
                     FriendlyByteBuf sendFb = new FriendlyByteBuf(outRaw.retainedDuplicate());
                     ServerPlayNetworking.send(player, LOD_DATA_ID, sendFb);
-
-                    var synced = PlayerTracker.getInstance().getSyncedChunks(player.getUUID());
-                    if (synced != null) {
-                        synced.add(pos.toLong());
-                    }
+                    continue;
                 }
+                setSynced(player, pos, false);
             }
         } finally {
             outRaw.release();
@@ -187,8 +193,11 @@ public class NetworkHandler {
                 sl != null ? sl.getData().clone() : null
             ));
         }
-        
-        if (sections.isEmpty()) return;
+
+        if (sections.isEmpty()) {
+            setSynced(player, pos, false);
+            return;
+        }
 
         LODDataPayload payload = new LODDataPayload(pos, minY, sections);
         ByteBuf outRaw = Unpooled.buffer();
@@ -197,11 +206,7 @@ public class NetworkHandler {
             payload.write(outFb);
 
             ServerPlayNetworking.send(player, LOD_DATA_ID, new FriendlyByteBuf(outRaw.retainedDuplicate()));
-
-            var synced = PlayerTracker.getInstance().getSyncedChunks(player.getUUID());
-            if (synced != null) {
-                synced.add(pos.toLong());
-            }
+            setSynced(player, pos, true);
         } finally {
             outRaw.release();
         }

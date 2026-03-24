@@ -207,6 +207,7 @@ public final class ChunkGenerationManager {
                                         LevelChunk c = level.getChunkSource().getChunk(syncPos.x, syncPos.z, false);
                                         if (c != null) {
                                             com.ethan.voxyworldgenv2.network.NetworkHandler.sendLODData(p, c);
+                                            synced.add(syncPos.toLong());
                                         }
                                     }
                                 }
@@ -215,7 +216,7 @@ public final class ChunkGenerationManager {
                         }
                     }
                     
-                    Thread.sleep(100);
+                    Thread.sleep(50);
                     continue;
                 }
                 
