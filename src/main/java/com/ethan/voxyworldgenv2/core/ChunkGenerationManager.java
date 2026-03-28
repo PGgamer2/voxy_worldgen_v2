@@ -200,6 +200,9 @@ public final class ChunkGenerationManager {
                             final List<ChunkPos> finalSyncBatch = new ArrayList<>(syncBatch);
                             final ServerLevel level = ds.level;
                             final UUID playerUUID = player.getUUID();
+                            for (ChunkPos syncPos : finalSyncBatch) {
+                                synced.add(syncPos.toLong());
+                            }
                             workerServer.execute(() -> {
                                 ServerPlayer p = workerServer.getPlayerList().getPlayer(playerUUID);
                                 if (p != null) {
@@ -207,7 +210,6 @@ public final class ChunkGenerationManager {
                                         LevelChunk c = level.getChunkSource().getChunk(syncPos.x, syncPos.z, false);
                                         if (c != null) {
                                             com.ethan.voxyworldgenv2.network.NetworkHandler.sendLODData(p, c);
-                                            synced.add(syncPos.toLong());
                                         }
                                     }
                                 }
@@ -538,6 +540,11 @@ public final class ChunkGenerationManager {
     
     public void scheduleConfigReload() {
         configReloadScheduled.set(true);
+    }
+
+    public boolean isChunkCompleted(ServerLevel level, ChunkPos pos) {
+        DimensionState state = dimensionStates.get(level.dimension());
+        return state != null && state.completedChunks.contains(pos.toLong());
     }
     
     public GenerationStats getStats() { return stats; }
