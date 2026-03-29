@@ -83,6 +83,17 @@ public class NetworkHandler {
         }
     }
 
+    private static void sendLODPayload(ServerPlayer player, LODDataPayload payload) {
+        ByteBuf outRaw = Unpooled.buffer();
+        try {
+            FriendlyByteBuf outBuf = new FriendlyByteBuf(outRaw);
+            payload.write(outBuf);
+            ServerPlayNetworking.send(player, LOD_DATA_ID, new FriendlyByteBuf(outRaw.retainedDuplicate()));
+        } finally {
+            outRaw.release();
+        }
+    }
+
     public static void broadcastLODData(LevelChunk chunk) {
         ChunkPos pos = chunk.getPos();
         int minY = chunk.getMinSection();
@@ -142,7 +153,7 @@ public class NetworkHandler {
                 continue;
             }
             
-            ServerPlayNetworking.send(player, payload);
+            sendLODPayload(player, payload);
                 
             // // mark as synced for this player
             // var synced = PlayerTracker.getInstance().getSyncedChunks(player.getUUID());
@@ -199,7 +210,7 @@ public class NetworkHandler {
             return;
         }
         
-        ServerPlayNetworking.send(player, new LODDataPayload(pos, minY, sections));
+        sendLODPayload(player, new LODDataPayload(pos, minY, sections));
         // double check, could be deleted.
         setSyncedState(player, pos, true);
     }
